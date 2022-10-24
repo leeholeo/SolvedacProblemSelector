@@ -1,10 +1,12 @@
-import nicknames
 import requests
 import time
+from nicknames import NICKNAMES
+from TIERS import TIERS, TIER_CONVERTER
+import github_issue_creation
 
 
 # 난이도 문제 목록 요청(solved.ac)
-def tier_problem_request(tier_number: int, page_number=1) -> bool:
+def tier_problem_request(tier_number: int, page_number=1) -> dict or bool:
     api = f'https://solved.ac/api/v3/search/problem?query=solvable:true+tier:{tier_number}&page={page_number}&sort=solved&direction=desc'
     request_time = time.time()
     response = requests.get(api)
@@ -17,7 +19,7 @@ def tier_problem_request(tier_number: int, page_number=1) -> bool:
 
 
 # 유저가 푼 문제 목록 요청(solved.ac)
-def user_solved_problem_request(user_nickname: str, page_number=1) -> bool:
+def user_solved_problem_request(user_nickname: str, page_number=1) -> dict or bool:
     api = f'https://solved.ac/api/v3/search/problem?query=solved_by:{user_nickname}&page={page_number}'
     request_time = time.time()
     response = requests.get(api)
@@ -51,7 +53,7 @@ def user_solved_problem(user_nickname: str, solved_problems: dict):
         return None, errors
 
     count = initial_response["count"]
-    total_page = (count-1)//100 + 1
+    total_page = (count-1)//50 + 1
     add_response_to_dict(initial_response, solved_problems)
     for page_num in range(2, total_page+1):
         response = user_solved_problem_request(user_nickname, page_num)
@@ -75,28 +77,14 @@ def total_user_solved_problem(user_nicknames: list):
 
 # initial setting
 initial_time = time.time()  # time check
-S5, S4, S3, S2, S1 = range(6, 11)
-G5, G4, G3, G2, G1 = range(11, 16)
-TIERS = [S2, S1, G5, G4]
-TIER_CONVERTER = {
-    6: "S5",
-    7: "S4",
-    8: "S5",
-    9: "S2",
-    10: "S1",
-    11: "G5",
-    12: "G4",
-    13: "G5",
-    14: "G2",
-    15: "G1"
-}
 
 # unsolved problems
-solved_problems, pages, errors = total_user_solved_problem(nicknames.nicknames)
+solved_problems, pages, errors = total_user_solved_problem(NICKNAMES)
 solved_problems_time = time.time()  # time check
 
 # tier problems unsolved
 problems = {}
+problems_names = {}
 problems_informations = {}
 for tier in TIERS:
     page_num = 1
@@ -125,9 +113,10 @@ for tier in TIERS:
                 continue
             # if unsolved
             problems[TIER_CONVERTER[tier]] = problem_id
+            problems_names[TIER_CONVERTER[tier]] = item["titles"][0]["title"]
             problems_informations[TIER_CONVERTER[tier]] = {
                 "푼 사람 수": accepted_user_count,
-                "평균 시도": average_tries,
+                "평균 시도": average_tries, 
             }
             break
         # if find unsolved problem, break
@@ -145,7 +134,9 @@ for tier in TIERS:
 tier_problems_time = time.time()    # time check
 
 # print problems
-print(problems) 
+print(problems)
+# print names of problems
+print(problems_names)
 # print informations of problems
 print(problems_informations)
 # print errors if exist
@@ -159,3 +150,9 @@ total_time = time.time()
 print(f"solved_problems_time: {solved_problems_time - initial_time:.2f}")
 print(f"tier_problems_time: {tier_problems_time - solved_problems_time:.2f}")
 print(f"total_time: {total_time - initial_time:.2f}")
+
+# create github issue
+if github_issue_creation.create_issue_request(problems, problems_names) is False:
+    print("!Github issue creation error occurred!")
+else:
+    print("Github issue created")
